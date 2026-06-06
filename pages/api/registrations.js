@@ -1,35 +1,38 @@
 // pages/api/registrations.js
 // Sales Comp Week '26 — Registration Tracker
 //
-// Channel distribution comes ENTIRELY from HubSpot Form Submissions.
-// For each submission we read the conversion `pageUrl` and parse
-// utm_source / utm_medium / utm_campaign from its query string.
-//
-// The old 3 endpoints (companies/search, properties/companies/lifecyclestage,
-// owners/{id}) are NOT used — they belonged to a company-prospecting script and
-// are not needed for channel tracking.
-//
 // Required HubSpot Private App scope: `forms`
 // Token is read from the HUBSPOT_TOKEN env var (set in Vercel — never in code).
 
 const HUBSPOT_TOKEN = process.env.HUBSPOT_TOKEN;
 const FORM_NAME = "[Webinar Registration] Sales Comp Week 2026: June - July";
 
-// ---- Summit timeline ----------------------------------------------------
-const WEEK1_START = Date.UTC(2026, 4, 14); // May 14, 2026 (form created)
-const TOTAL_WEEKS = 9; // W1 May 14 ... W9 Jul 9 (final session week)
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// ---- Weekly cohort ranges (UTC midnight, start inclusive / end exclusive) ----
+// W1 is 4 days (form launched mid-week); W9 is 4 days (final session day = Jul 9).
+const WEEK_RANGES = [
+  [Date.UTC(2026, 4, 14), Date.UTC(2026, 4, 18)],  // W1 May 14–17
+  [Date.UTC(2026, 4, 18), Date.UTC(2026, 4, 25)],  // W2 May 18–24
+  [Date.UTC(2026, 4, 25), Date.UTC(2026, 5,  1)],  // W3 May 25–31
+  [Date.UTC(2026, 5,  1), Date.UTC(2026, 5,  8)],  // W4 Jun 1–7
+  [Date.UTC(2026, 5,  8), Date.UTC(2026, 5, 15)],  // W5 Jun 8–14
+  [Date.UTC(2026, 5, 15), Date.UTC(2026, 5, 22)],  // W6 Jun 15–21
+  [Date.UTC(2026, 5, 22), Date.UTC(2026, 5, 29)],  // W7 Jun 22–28
+  [Date.UTC(2026, 5, 29), Date.UTC(2026, 6,  6)],  // W8 Jun 29–Jul 5
+  [Date.UTC(2026, 6,  6), Date.UTC(2026, 6, 10)],  // W9 Jul 6–9
+];
+const TOTAL_WEEKS = WEEK_RANGES.length;
+
 const SESSIONS = [
-  { id: "S1", title: "The Mid-Year Comp Reset", date: "2026-06-23" },
-  { id: "S2", title: "The Comp Infrastructure Gap", date: "2026-07-07" },
-  { id: "S3", title: "The Comp Efficiency Paradox", date: "2026-07-09" },
+  { id: "S1", title: "The Mid-Year Comp Reset",       date: "2026-06-23" },
+  { id: "S2", title: "The Comp Infrastructure Gap",   date: "2026-07-07" },
+  { id: "S3", title: "The Comp Efficiency Paradox",   date: "2026-07-09" },
 ];
 
 const UNKNOWN = "Direct / Unknown";
 
-// ---- HubSpot helper -----------------------------------------------------
+// ---- HubSpot helper -------------------------------------------------------
 async function hs(path) {
   const res = await fetch(`https://api.hubapi.com${path}`, {
     headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}` },
@@ -60,84 +63,115 @@ async function getSubmissions(formId) {
   let after;
   do {
     const qs = after ? `?limit=50&after=${after}` : `?limit=50`;
-    const data = await hs(
-      `/form-integrations/v1/submissions/forms/${formId}${qs}`
-    );
+    const data = await hs(`/form-integrations/v1/submissions/forms/${formId}${qs}`);
     out.push(...(data.results || []));
     after = data.paging?.next?.after;
   } while (after);
   return out;
 }
 
-// ---- UTM parsing --------------------------------------------------------
-// Read utm_* from the conversion pageUrl. Returns null if no UTMs present.
+// ---- Email extraction -----------------------------------------------------
+function getEmail(sub) {
+  const field = (sub.values || []).find((v) => v.name === "email");
+  return (field?.value || "").toLowerCase().trim() || null;
+}
+
+// ---- UTM parsing ----------------------------------------------------------
 function parseUtms(pageUrl) {
   if (!pageUrl) return null;
   try {
     const params = new URL(pageUrl).searchParams;
-    const source = params.get("utm_source");
-    const medium = params.get("utm_medium");
+    const source   = params.get("utm_source");
+    const medium   = params.get("utm_medium");
     const campaign = params.get("utm_campaign");
     if (!source && !medium && !campaign) return null;
     return {
-      source: source || "(none)",
-      medium: medium || "(none)",
-      campaign: campaign || "(none)",
+      source:   (source   || "(none)").toLowerCase().trim(),
+      medium:   (medium   || "(none)").toLowerCase().trim(),
+      campaign: (campaign || "(none)").toLowerCase().trim(),
     };
   } catch {
-    return null; // malformed URL
+    return null;
   }
 }
 
-// Channel shown as-is: "campaign | medium | source" (no hardcoded mapping).
-function channelKey(utm) {
-  return utm ? `${utm.campaign} | ${utm.medium} | ${utm.source}` : UNKNOWN;
+// ---- Channel mapping ------------------------------------------------------
+// Rules are evaluated in priority order (most-specific first).
+function mapToChannel(utm) {
+  if (!utm) return UNKNOWN;
+  const { campaign: c = "", medium: m = "", source: s = "" } = utm;
+
+  if (c === "bdr" && m === "1-1-invites" && s === "linkedin") return "BDR LinkedIn Invites";
+  if (c === "bdr" && m === "1-1-invites" && s === "email")    return "BDR Email Invites";
+  if (c === "ae"  && m === "1-1" && s === "invites") return "AE Invites";
+  if (c === "csm" && m === "1-1" && s === "invites") return "CSM Invites";
+  if ((c === "kangkhita" || c === "jyothsna") && m === "1-1-reachouts" && s === "linkedin") return "LinkedIn 1-1 Invites";
+  if (/^\w+-abm-\d+$/.test(c)    && m === "linkedin" && s === "organic-social") return "ABM BDR Organic Social";
+  if (/^\w+-intent-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "Intent BDR Organic Social";
+  if (/^(kelly|mike|siva|jose)-post-\d+$/.test(c)  && m === "linkedin" && s === "organic-social") return "Executive LinkedIn Organic";
+  if (/^(matt|dillon)-post-\d+$/.test(c)            && m === "linkedin" && s === "organic-social") return "Session 1 Speakers LinkedIn Organic";
+  if (/^(trenli|juan)-post-\d+$/.test(c)            && m === "linkedin" && s === "organic-social") return "Session 2 Speakers LinkedIn Organic";
+  if (/^(nate|john)-post-\d+$/.test(c)              && m === "linkedin" && s === "organic-social") return "Session 3 Speakers LinkedIn Organic";
+  if (/^post[\s-]?\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "Everstage Organic Social";
+  if (m === "paid" && s === "linkedin") return "LinkedIn Ads";
+  if (m === "mailchimp" && s === "email")                        return "Mailchimp Email Blasts";
+  if (c === "email-blast" && m === "community" && s === "roco")  return "ROCO Promotions";
+  if (m === "slack" && s === "uncappd") return "Uncappd Slack Posts";
+  if (c === "pop-up" && m === "notification" && s === "homepage") return "Homepage Hello Bar";
+  return UNKNOWN;
 }
 
+// ---- Week helpers ---------------------------------------------------------
 function weekIndex(tsMs) {
-  const i = Math.floor((tsMs - WEEK1_START) / WEEK_MS);
-  return Math.min(Math.max(i, 0), TOTAL_WEEKS - 1);
+  for (let i = 0; i < WEEK_RANGES.length; i++) {
+    if (tsMs >= WEEK_RANGES[i][0] && tsMs < WEEK_RANGES[i][1]) return i;
+  }
+  return tsMs < WEEK_RANGES[0][0] ? 0 : TOTAL_WEEKS - 1;
 }
 
-// ---- Handler ------------------------------------------------------------
+function weekLabel(i) {
+  const [start, endExcl] = WEEK_RANGES[i];
+  const startD = new Date(start);
+  const endD   = new Date(endExcl - DAY_MS);
+  const startStr = startD.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const endStr   =
+    startD.getUTCMonth() === endD.getUTCMonth()
+      ? String(endD.getUTCDate())
+      : endD.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return `W${i + 1} ${startStr}–${endStr}`;
+}
+
+// ---- Handler --------------------------------------------------------------
 export default async function handler(req, res) {
   try {
-    // Never let Vercel/CDN serve a cached copy — always read live from HubSpot.
     res.setHeader("Cache-Control", "no-store, max-age=0");
-
     if (!HUBSPOT_TOKEN) throw new Error("HUBSPOT_TOKEN env var not set");
 
-    const formId = await getFormId();
-    const submissions = await getSubmissions(formId);
+    const formId         = await getFormId();
+    const rawSubmissions = await getSubmissions(formId);
 
-    // Week headers with session milestone markers
-    const weeks = Array.from({ length: TOTAL_WEEKS }, (_, i) => {
-      const start = WEEK1_START + i * WEEK_MS;
-      const startD = new Date(start);
-      const sessions = SESSIONS.filter((s) => {
-        const sd = Date.parse(s.date);
-        return sd >= start && sd < start + WEEK_MS;
-      }).map((s) => s.id);
-      return {
-        label: `W${i + 1} ${startD.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          timeZone: "UTC",
-        })}`,
-        startISO: startD.toISOString().slice(0, 10),
-        sessions,
-      };
+    const submissions = rawSubmissions.filter((sub) => {
+      const email = getEmail(sub);
+      if (!email) return false;
+      if (email.endsWith("@everstage.com")) return false;
+      return true;
     });
 
-    // Aggregate: channel -> [count per week]
+    const weeks = WEEK_RANGES.map((range, i) => ({
+      label:    weekLabel(i),
+      startISO: new Date(range[0]).toISOString().slice(0, 10),
+      sessions: SESSIONS
+        .filter((s) => { const sd = Date.parse(s.date); return sd >= range[0] && sd < range[1]; })
+        .map((s) => s.id),
+    }));
+
     const counts = {};
     for (const sub of submissions) {
-      const key = channelKey(parseUtms(sub.pageUrl));
-      const wi = weekIndex(sub.submittedAt);
+      const key = mapToChannel(parseUtms(sub.pageUrl));
+      const wi  = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
     }
 
-    // Sort channels by total desc, keep Direct/Unknown last
     const channels = Object.keys(counts).sort((a, b) => {
       if (a === UNKNOWN) return 1;
       if (b === UNKNOWN) return -1;
@@ -145,47 +179,28 @@ export default async function handler(req, res) {
       return sum(b) - sum(a);
     });
 
-    const matrix = channels.map((c) => counts[c]);
+    const matrix        = channels.map((c) => counts[c]);
     const channelTotals = matrix.map((r) => r.reduce((a, b) => a + b, 0));
-    const weekTotals = weeks.map((_, wi) =>
-      matrix.reduce((s, r) => s + r[wi], 0)
-    );
+    const weekTotals    = weeks.map((_, wi) => matrix.reduce((s, r) => s + r[wi], 0));
 
-    // Cumulative + WoW % change
     const cumTotals = [];
-    const wowPct = [];
+    const wowPct    = [];
     weekTotals.forEach((v, i) => {
       cumTotals.push((cumTotals[i - 1] || 0) + v);
       const prev = weekTotals[i - 1];
-      wowPct.push(
-        i === 0 || prev === 0 ? null : Math.round(((v - prev) / prev) * 100)
-      );
+      wowPct.push(i === 0 || prev === 0 ? null : Math.round(((v - prev) / prev) * 100));
     });
 
-    const total = channelTotals.reduce((a, b) => a + b, 0);
-
-    // Stat cards
-    const now = Date.now();
-    const thisWeek = weekTotals[weekIndex(now)] || 0;
+    const total          = channelTotals.reduce((a, b) => a + b, 0);
+    const now            = Date.now();
+    const thisWeek       = weekTotals[weekIndex(now)] || 0;
     const activeChannels = channels.filter((c) => c !== UNKNOWN).length;
-    const daysToS1 = Math.max(
-      0,
-      Math.ceil((Date.parse(SESSIONS[0].date) - now) / DAY_MS)
-    );
+    const daysToS1       = Math.max(0, Math.ceil((Date.parse(SESSIONS[0].date) - now) / DAY_MS));
 
     res.status(200).json({
       updatedAt: new Date().toISOString(),
-      total,
-      thisWeek,
-      activeChannels,
-      daysToS1,
-      weeks,
-      channels,
-      matrix,
-      channelTotals,
-      weekTotals,
-      cumTotals,
-      wowPct,
+      total, thisWeek, activeChannels, daysToS1,
+      weeks, channels, matrix, channelTotals, weekTotals, cumTotals, wowPct,
       sessions: SESSIONS,
     });
   } catch (err) {
