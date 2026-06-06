@@ -10,7 +10,6 @@ const FORM_NAME = "[Webinar Registration] Sales Comp Week 2026: June - July";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ---- Weekly cohort ranges (UTC midnight, start inclusive / end exclusive) ----
-// W1 is 4 days (form launched mid-week); W9 is 4 days (final session day = Jul 9).
 const WEEK_RANGES = [
   [Date.UTC(2026, 4, 14), Date.UTC(2026, 4, 18)],  // W1 May 14–17
   [Date.UTC(2026, 4, 18), Date.UTC(2026, 4, 25)],  // W2 May 18–24
@@ -44,7 +43,6 @@ async function hs(path) {
   return res.json();
 }
 
-// 1. Find the form by name -> formId
 async function getFormId() {
   let after;
   do {
@@ -57,7 +55,6 @@ async function getFormId() {
   throw new Error(`Form not found: ${FORM_NAME}`);
 }
 
-// 2. Pull every submission (paginated; limit max = 50)
 async function getSubmissions(formId) {
   const out = [];
   let after;
@@ -95,8 +92,7 @@ function parseUtms(pageUrl) {
   }
 }
 
-// ---- Channel mapping ------------------------------------------------------
-// Rules are evaluated in priority order (most-specific first).
+// ---- Channel mapping (priority order: most-specific first) ----------------
 function mapToChannel(utm) {
   if (!utm) return UNKNOWN;
   const { campaign: c = "", medium: m = "", source: s = "" } = utm;
@@ -150,6 +146,15 @@ export default async function handler(req, res) {
     const formId         = await getFormId();
     const rawSubmissions = await getSubmissions(formId);
 
+    // Tally excluded submissions before filtering
+    let filteredEverstage = 0;
+    let filteredNoEmail   = 0;
+    for (const sub of rawSubmissions) {
+      const email = getEmail(sub);
+      if (!email) filteredNoEmail++;
+      else if (email.endsWith("@everstage.com")) filteredEverstage++;
+    }
+
     const submissions = rawSubmissions.filter((sub) => {
       const email = getEmail(sub);
       if (!email) return false;
@@ -157,6 +162,7 @@ export default async function handler(req, res) {
       return true;
     });
 
+    // Week metadata
     const weeks = WEEK_RANGES.map((range, i) => ({
       label:    weekLabel(i),
       startISO: new Date(range[0]).toISOString().slice(0, 10),
@@ -165,13 +171,32 @@ export default async function handler(req, res) {
         .map((s) => s.id),
     }));
 
+    // Aggregate: channel -> count per week
     const counts = {};
+    // Daily counts: "YYYY-MM-DD" -> total count across all channels
+    const dailyCounts = {};
+
     for (const sub of submissions) {
-      const key = mapToChannel(parseUtms(sub.pageUrl));
-      const wi  = weekIndex(sub.submittedAt);
+      const key  = mapToChannel(parseUtms(sub.pageUrl));
+      const wi   = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
+
+      const dateStr = new Date(sub.submittedAt).toISOString().slice(0, 10);
+      dailyCounts[dateStr] = (dailyCounts[dateStr] || 0) + 1;
     }
 
+    // Per-week daily breakdown: array of [{date, label, count}] per week
+    const weekDailyBreakdown = WEEK_RANGES.map(([start, endExcl]) => {
+      const days = [];
+      for (let d = start; d < endExcl; d += DAY_MS) {
+        const dateStr = new Date(d).toISOString().slice(0, 10);
+        const label   = new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+        days.push({ date: dateStr, label, count: dailyCounts[dateStr] || 0 });
+      }
+      return days;
+    });
+
+    // Sort channels by total desc, keep Direct/Unknown last
     const channels = Object.keys(counts).sort((a, b) => {
       if (a === UNKNOWN) return 1;
       if (b === UNKNOWN) return -1;
@@ -200,7 +225,14 @@ export default async function handler(req, res) {
     res.status(200).json({
       updatedAt: new Date().toISOString(),
       total, thisWeek, activeChannels, daysToS1,
+      filteredStats: {
+        everstage:  filteredEverstage,
+        noEmail:    filteredNoEmail,
+        total:      filteredEverstage + filteredNoEmail,
+        rawTotal:   rawSubmissions.length,
+      },
       weeks, channels, matrix, channelTotals, weekTotals, cumTotals, wowPct,
+      weekDailyBreakdown,
       sessions: SESSIONS,
     });
   } catch (err) {
