@@ -23,9 +23,9 @@ const WEEK_RANGES = [
 const TOTAL_WEEKS = WEEK_RANGES.length;
 
 const SESSIONS = [
-  { id: "S1", title: "The Mid-Year Comp Reset",      date: "2026-06-23" },
-  { id: "S2", title: "The Comp Infrastructure Gap",  date: "2026-07-07" },
-  { id: "S3", title: "The Comp Efficiency Paradox",  date: "2026-07-09" },
+  { id: "S1", title: "The Mid-Year Comp Reset",        date: "2026-06-23" },
+  { id: "S2", title: "The Comp Infrastructure Gap",    date: "2026-07-07" },
+  { id: "S3", title: "The Comp Efficiency Paradox",    date: "2026-07-09" },
 ];
 
 const UNKNOWN = "Direct / Unknown";
@@ -150,18 +150,21 @@ export default async function handler(req, res) {
     const rawSubmissions = await getSubmissions(formId);
 
     // Tally excluded submissions before filtering
-    let filteredEverstage = 0;
-    let filteredNoEmail   = 0;
+    let filteredEverstage  = 0;
+    let filteredNoEmail    = 0;
+    let filteredNoContact  = 0;
     for (const sub of rawSubmissions) {
       const email = getEmail(sub);
       if (!email) filteredNoEmail++;
       else if (email.endsWith("@everstage.com")) filteredEverstage++;
+      else if ("contactVid" in sub && !sub.contactVid) filteredNoContact++;
     }
 
     const submissions = rawSubmissions.filter((sub) => {
       const email = getEmail(sub);
       if (!email) return false;
       if (email.endsWith("@everstage.com")) return false;
+      if ("contactVid" in sub && !sub.contactVid) return false;
       return true;
     });
 
@@ -172,7 +175,7 @@ export default async function handler(req, res) {
       sessions: SESSIONS
         .filter((s) => { const sd = Date.parse(s.date); return sd >= range[0] && sd < range[1]; })
         .map((s) => s.id),
-      }));
+    }));
 
     // Aggregate: channel -> count per week
     const counts      = {};
@@ -233,10 +236,11 @@ export default async function handler(req, res) {
       activeChannels,
       daysToS1,
       filteredStats: {
-        everstage: filteredEverstage,
-        noEmail:   filteredNoEmail,
-        total:     filteredEverstage + filteredNoEmail,
-        rawTotal:  rawSubmissions.length,
+        everstage:  filteredEverstage,
+        noEmail:    filteredNoEmail,
+        noContact:  filteredNoContact,
+        total:      filteredEverstage + filteredNoEmail + filteredNoContact,
+        rawTotal:   rawSubmissions.length,
       },
       weeks,
       channels,
