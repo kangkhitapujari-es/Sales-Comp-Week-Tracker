@@ -109,6 +109,7 @@ function mapToChannel(utm) {
   if (/^(trenli|juan)-post-\d+$/.test(c)             && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 2 Speakers LinkedIn Organic";
   if (/^(nate|nathan|john)-post-\d+$/.test(c)        && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 3 Speakers LinkedIn Organic";
   if (/^post[\s-]?\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "Everstage Organic Social";
+  if (/^\w+-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
 
   if (m === "paid" && s === "linkedin") return "LinkedIn Ads";
   if (m === "mailchimp" && s === "email") return "Mailchimp Email Blasts";
@@ -171,7 +172,7 @@ export default async function handler(req, res) {
       sessions: SESSIONS
         .filter((s) => { const sd = Date.parse(s.date); return sd >= range[0] && sd < range[1]; })
         .map((s) => s.id),
-    }));
+      }));
 
     // Aggregate: channel -> count per week
     const counts      = {};
