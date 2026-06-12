@@ -173,7 +173,7 @@ export default async function handler(req, res) {
 
     // Aggregate: channel -> count per week
     const counts      = {};
-    // Daily counts: "YYYY-MM-DD" -> total count across all channels
+    // Daily counts keyed by IST date (YYYY-MM-DD)
     const dailyCounts = {};
 
     for (const sub of submissions) {
@@ -181,7 +181,7 @@ export default async function handler(req, res) {
       const wi  = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
 
-      const dateStr = new Date(sub.submittedAt).toISOString().slice(0, 10);
+      const dateStr = new Date(sub.submittedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       dailyCounts[dateStr] = (dailyCounts[dateStr] || 0) + 1;
     }
 
@@ -189,8 +189,8 @@ export default async function handler(req, res) {
     const weekDailyBreakdown = WEEK_RANGES.map(([start, endExcl]) => {
       const days = [];
       for (let d = start; d < endExcl; d += DAY_MS) {
-        const dateStr = new Date(d).toISOString().slice(0, 10);
-        const label   = new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+        const dateStr = new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        const label   = new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "Asia/Kolkata" });
         days.push({ date: dateStr, label, count: dailyCounts[dateStr] || 0 });
       }
       return days;
