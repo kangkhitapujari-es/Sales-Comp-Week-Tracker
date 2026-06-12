@@ -1,8 +1,8 @@
 // pages/api/registrations.js
-// Sales Comp Week '26 — Registration Tracker
+// Sales Comp Week '26 -- Registration Tracker
 //
 // Required HubSpot Private App scope: `forms`
-// Token is read from the HUBSPOT_TOKEN env var (set in Vercel — never in code).
+// Token is read from the HUBSPOT_TOKEN env var (set in Vercel -- never in code).
 
 const HUBSPOT_TOKEN = process.env.HUBSPOT_TOKEN;
 const FORM_NAME = "[Webinar Registration] Sales Comp Week 2026: June - July";
@@ -11,15 +11,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ---- Weekly cohort ranges (UTC midnight, start inclusive / end exclusive) ----
 const WEEK_RANGES = [
-  [Date.UTC(2026, 4, 14), Date.UTC(2026, 4, 18)],  // W1 May 14–17
-  [Date.UTC(2026, 4, 18), Date.UTC(2026, 4, 25)],  // W2 May 18–24
-  [Date.UTC(2026, 4, 25), Date.UTC(2026, 5,  1)],  // W3 May 25–31
-  [Date.UTC(2026, 5,  1), Date.UTC(2026, 5,  8)],  // W4 Jun 1–7
-  [Date.UTC(2026, 5,  8), Date.UTC(2026, 5, 15)],  // W5 Jun 8–14
-  [Date.UTC(2026, 5, 15), Date.UTC(2026, 5, 22)],  // W6 Jun 15–21
-  [Date.UTC(2026, 5, 22), Date.UTC(2026, 5, 29)],  // W7 Jun 22–28
-  [Date.UTC(2026, 5, 29), Date.UTC(2026, 6,  6)],  // W8 Jun 29–Jul 5
-  [Date.UTC(2026, 6,  6), Date.UTC(2026, 6, 10)],  // W9 Jul 6–9
+  [Date.UTC(2026, 4, 14), Date.UTC(2026, 4, 18)], // W1 May 14-17
+  [Date.UTC(2026, 4, 18), Date.UTC(2026, 4, 25)], // W2 May 18-24
+  [Date.UTC(2026, 4, 25), Date.UTC(2026, 5,  1)], // W3 May 25-31
+  [Date.UTC(2026, 5,  1), Date.UTC(2026, 5,  8)], // W4 Jun 1-7
+  [Date.UTC(2026, 5,  8), Date.UTC(2026, 5, 15)], // W5 Jun 8-14
+  [Date.UTC(2026, 5, 15), Date.UTC(2026, 5, 22)], // W6 Jun 15-21
+  [Date.UTC(2026, 5, 22), Date.UTC(2026, 5, 29)], // W7 Jun 22-28
+  [Date.UTC(2026, 5, 29), Date.UTC(2026, 6,  6)], // W8 Jun 29-Jul 5
+  [Date.UTC(2026, 6,  6), Date.UTC(2026, 6, 10)], // W9 Jul 6-9
 ];
 const TOTAL_WEEKS = WEEK_RANGES.length;
 
@@ -99,21 +99,21 @@ function mapToChannel(utm) {
 
   if (c === "bdr" && m === "1-1-invites" && s === "linkedin") return "BDR LinkedIn Invites";
   if (c === "bdr" && m === "1-1-invites" && s === "email")    return "BDR Email Invites";
-  if (c === "ae"  && m === "1-1" && s === "invites") return "AE Invites";
-  if (c === "csm" && m === "1-1" && s === "invites") return "CSM Invites";
+  if (c === "ae"  && m === "1-1"         && s === "invites")  return "AE Invites";
+  if (c === "csm" && m === "1-1"         && s === "invites")  return "CSM Invites";
   if ((c === "kangkhita" || c === "jyothsna") && m === "1-1-reachouts" && s === "linkedin") return "LinkedIn 1-1 Invites";
-  if (/^\w+-abm-\d+$/.test(c)    && m === "linkedin" && s === "organic-social") return "ABM BDR Organic Social";
-  if (/^\w+-intent-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "Intent BDR Organic Social";
-  if (/^(kelly|mike|siva|jose)-post-\d+$/.test(c)  && m === "linkedin" && s === "organic-social") return "Executive LinkedIn Organic";
-  if (/^(matt|dillon)-post-\d+$/.test(c)            && m === "linkedin" && s === "organic-social") return "Session 1 Speakers LinkedIn Organic";
-  if (/^(trenli|juan)-post-\d+$/.test(c)            && m === "linkedin" && s === "organic-social") return "Session 2 Speakers LinkedIn Organic";
-  if (/^(nate|john)-post-\d+$/.test(c)              && m === "linkedin" && s === "organic-social") return "Session 3 Speakers LinkedIn Organic";
+  if (/^\w+-(abm|intent)-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
+  if (/^(kelly|mike|siva|jose)-post-\d+$/.test(c) && (m === "linkedin" || m === "executive-linkedin") && s === "organic-social") return "Executive LinkedIn Organic";
+  if (/^(matt|matthew|dillon)-post-\d+$/.test(c) && (m === "linkedin" || m === "speaker-linkedin") && s === "organic-social") return "Session 1 Speakers LinkedIn Organic";
+  if (/^(trenli|juan)-post-\d+$/.test(c) && (m === "linkedin" || m === "speaker-linkedin") && s === "organic-social") return "Session 2 Speakers LinkedIn Organic";
+  if (/^(nate|nathan|john)-post-\d+$/.test(c) && (m === "linkedin" || m === "speaker-linkedin") && s === "organic-social") return "Session 3 Speakers LinkedIn Organic";
   if (/^post[\s-]?\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "Everstage Organic Social";
-  if (m === "paid" && s === "linkedin") return "LinkedIn Ads";
-  if (m === "mailchimp" && s === "email")                        return "Mailchimp Email Blasts";
-  if (c === "email-blast" && m === "community" && s === "roco")  return "ROCO Promotions";
-  if (m === "slack" && s === "uncappd") return "Uncappd Slack Posts";
-  if (c === "pop-up" && m === "notification" && s === "homepage") return "Homepage Hello Bar";
+  if (m === "paid"        && s === "linkedin") return "LinkedIn Ads";
+  if (m === "mailchimp"   && s === "email")    return "Mailchimp Email Blasts";
+  if (c === "email-blast" && m === "community" && s === "roco") return "ROCO Promotions";
+  if (m === "slack"       && s === "uncappd")  return "Uncappd Slack Posts";
+  if (m === "newsletter"  && s === "uncappd")  return "Uncappd Newsletter";
+  if (c === "pop-up"      && m === "notification" && s === "homepage") return "Homepage Hello Bar";
   return UNKNOWN;
 }
 
@@ -130,11 +130,11 @@ function weekLabel(i) {
   const startD = new Date(start);
   const endD   = new Date(endExcl - DAY_MS);
   const startStr = startD.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  const endStr   =
+  const endStr =
     startD.getUTCMonth() === endD.getUTCMonth()
       ? String(endD.getUTCDate())
       : endD.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  return `W${i + 1} ${startStr}–${endStr}`;
+  return `W${i + 1} ${startStr}-${endStr}`;
 }
 
 // ---- Handler --------------------------------------------------------------
@@ -151,14 +151,14 @@ export default async function handler(req, res) {
     let filteredNoEmail   = 0;
     for (const sub of rawSubmissions) {
       const email = getEmail(sub);
-      if (!email) filteredNoEmail++;
+      if (!email)                               filteredNoEmail++;
       else if (email.endsWith("@everstage.com")) filteredEverstage++;
     }
 
     const submissions = rawSubmissions.filter((sub) => {
       const email = getEmail(sub);
-      if (!email) return false;
-      if (email.endsWith("@everstage.com")) return false;
+      if (!email)                               return false;
+      if (email.endsWith("@everstage.com"))     return false;
       return true;
     });
 
@@ -172,13 +172,13 @@ export default async function handler(req, res) {
     }));
 
     // Aggregate: channel -> count per week
-    const counts = {};
+    const counts      = {};
     // Daily counts: "YYYY-MM-DD" -> total count across all channels
     const dailyCounts = {};
 
     for (const sub of submissions) {
-      const key  = mapToChannel(parseUtms(sub.pageUrl));
-      const wi   = weekIndex(sub.submittedAt);
+      const key = mapToChannel(parseUtms(sub.pageUrl));
+      const wi  = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
 
       const dateStr = new Date(sub.submittedAt).toISOString().slice(0, 10);
@@ -198,7 +198,7 @@ export default async function handler(req, res) {
 
     // Sort channels by total desc, keep Direct/Unknown last
     const channels = Object.keys(counts).sort((a, b) => {
-      if (a === UNKNOWN) return 1;
+      if (a === UNKNOWN) return  1;
       if (b === UNKNOWN) return -1;
       const sum = (k) => counts[k].reduce((x, y) => x + y, 0);
       return sum(b) - sum(a);
@@ -226,10 +226,10 @@ export default async function handler(req, res) {
       updatedAt: new Date().toISOString(),
       total, thisWeek, activeChannels, daysToS1,
       filteredStats: {
-        everstage:  filteredEverstage,
-        noEmail:    filteredNoEmail,
-        total:      filteredEverstage + filteredNoEmail,
-        rawTotal:   rawSubmissions.length,
+        everstage: filteredEverstage,
+        noEmail:   filteredNoEmail,
+        total:     filteredEverstage + filteredNoEmail,
+        rawTotal:  rawSubmissions.length,
       },
       weeks, channels, matrix, channelTotals, weekTotals, cumTotals, wowPct,
       weekDailyBreakdown,
