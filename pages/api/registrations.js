@@ -151,16 +151,13 @@ export default async function handler(req, res) {
     // Tally excluded submissions before filtering
     let filteredEverstage = 0;
     let filteredNoEmail   = 0;
-    let filteredNoContact = 0;
     for (const sub of rawSubmissions) {
-      if (!sub.contactId) { filteredNoContact++; continue; }
       const email = getEmail(sub);
       if (!email) filteredNoEmail++;
       else if (email.endsWith("@everstage.com")) filteredEverstage++;
     }
 
     const submissions = rawSubmissions.filter((sub) => {
-      if (!sub.contactId) return false;
       const email = getEmail(sub);
       if (!email) return false;
       if (email.endsWith("@everstage.com")) return false;
@@ -235,11 +232,10 @@ export default async function handler(req, res) {
       activeChannels,
       daysToS1,
       filteredStats: {
-        everstage:  filteredEverstage,
-        noEmail:    filteredNoEmail,
-        noContact:  filteredNoContact,
-        total:      filteredEverstage + filteredNoEmail + filteredNoContact,
-        rawTotal:   rawSubmissions.length,
+        everstage: filteredEverstage,
+        noEmail:   filteredNoEmail,
+        total:     filteredEverstage + filteredNoEmail,
+        rawTotal:  rawSubmissions.length,
       },
       weeks,
       channels,
