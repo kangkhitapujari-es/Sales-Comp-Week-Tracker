@@ -1,7 +1,7 @@
 // pages/api/registrations.js
 // Sales Comp Week '26 -- Registration Tracker
 //
-// Required HubSpot Private App scope: `forms`
+// Required HubSpot Private App scope: `forms`, `crm.objects.contacts.read`
 // Token is read from the HUBSPOT_TOKEN env var (set in Vercel -- never in code).
 
 const HUBSPOT_TOKEN = process.env.HUBSPOT_TOKEN;
@@ -31,9 +31,14 @@ const SESSIONS = [
 const UNKNOWN = "Direct / Unknown";
 
 // ---- HubSpot helper -------------------------------------------------------
-async function hs(path) {
+async function hs(path, opts = {}) {
   const res = await fetch(`https://api.hubapi.com${path}`, {
-    headers: { Authorization: `Bearer ${HUBSPOT_TOKEN}` },
+    method: opts.method || "GET",
+    headers: {
+      Authorization: `Bearer ${HUBSPOT_TOKEN}`,
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(opts.body ? { body: opts.body } : {}),
   });
   if (!res.ok) {
     const body = await res.text();
@@ -64,6 +69,36 @@ async function getSubmissions(formId) {
     after = data.paging?.next?.after;
   } while (after);
   return out;
+}
+
+// Batch-fetch UTM properties from HubSpot contact records.
+// Used as fallback when pageUrl has no UTMs (e.g. email link redirect lost UTMs).
+// Returns { "vid": { source, medium, campaign } }.
+async function batchGetContactUtms(contactVids) {
+  if (!contactVids.length) return {};
+  const utmMap = {};
+  for (let i = 0; i < contactVids.length; i += 100) {
+    const chunk = contactVids.slice(i, i + 100);
+    const data = await hs("/crm/v3/objects/contacts/batch/read", {
+      method: "POST",
+      body: JSON.stringify({
+        inputs: chunk.map((vid) => ({ id: String(vid) })),
+        properties: ["utm_source", "utm_medium", "utm_campaign"],
+      }),
+    });
+    for (const contact of data.results || []) {
+      const p = contact.properties || {};
+      const s = p.utm_source, m = p.utm_medium, c = p.utm_campaign;
+      if (s || m || c) {
+        utmMap[String(contact.id)] = {
+          source:   (s || "(none)").toLowerCase().trim(),
+          medium:   (m || "(none)").toLowerCase().trim(),
+          campaign: (c || "(none)").toLowerCase().trim(),
+        };
+      }
+    }
+  }
+  return utmMap;
 }
 
 // ---- Email extraction -----------------------------------------------------
@@ -182,6 +217,15 @@ export default async function handler(req, res) {
       return true;
     });
 
+    // For submissions still unattributed after pageUrl+formValues, fetch UTMs from contact records
+    const needsContactLookup = submissions
+      .filter((sub) => {
+        const utm = parseUtms(sub.pageUrl) || parseUtmsFromValues(sub);
+        return mapToChannel(utm) === UNKNOWN && sub.contactVid;
+      })
+      .map((sub) => sub.contactVid);
+    const contactUtmMap = await batchGetContactUtms(needsContactLookup);
+
     // Week metadata
     const weeks = WEEK_RANGES.map((range, i) => ({
       label:    weekLabel(i),
@@ -196,7 +240,9 @@ export default async function handler(req, res) {
     const dailyCounts = {};
 
     for (const sub of submissions) {
-      const utm = parseUtms(sub.pageUrl) || parseUtmsFromValues(sub);
+      const utm = parseUtms(sub.pageUrl)
+        || parseUtmsFromValues(sub)
+        || (sub.contactVid ? contactUtmMap[String(sub.contactVid)] : null);
       const key = mapToChannel(utm);
       const wi  = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
