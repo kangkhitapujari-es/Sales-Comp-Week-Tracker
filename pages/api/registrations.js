@@ -8,17 +8,21 @@ const HUBSPOT_TOKEN = process.env.HUBSPOT_TOKEN;
 const FORM_NAME = "[Webinar Registration] Sales Comp Week 2026: June - July";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// ---- Weekly cohort ranges (UTC midnight, start inclusive / end exclusive) ----
+// IST is UTC+5:30 — week boundaries are IST midnight so the daily IST chart
+// and the weekly buckets stay in sync.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000; // 19 800 000 ms
+
+// ---- Weekly cohort ranges (IST midnight, start inclusive / end exclusive) ----
 const WEEK_RANGES = [
-  [Date.UTC(2026, 4, 14), Date.UTC(2026, 4, 18)], // W1 May 14-17
-  [Date.UTC(2026, 4, 18), Date.UTC(2026, 4, 25)], // W2 May 18-24
-  [Date.UTC(2026, 4, 25), Date.UTC(2026, 5, 1)],  // W3 May 25-31
-  [Date.UTC(2026, 5, 1),  Date.UTC(2026, 5, 8)],  // W4 Jun 1-7
-  [Date.UTC(2026, 5, 8),  Date.UTC(2026, 5, 15)], // W5 Jun 8-14
-  [Date.UTC(2026, 5, 15), Date.UTC(2026, 5, 22)], // W6 Jun 15-21
-  [Date.UTC(2026, 5, 22), Date.UTC(2026, 5, 29)], // W7 Jun 22-28
-  [Date.UTC(2026, 5, 29), Date.UTC(2026, 6, 6)],  // W8 Jun 29-Jul 5
-  [Date.UTC(2026, 6, 6),  Date.UTC(2026, 6, 10)], // W9 Jul 6-9
+  [Date.UTC(2026, 4, 14) - IST_OFFSET_MS, Date.UTC(2026, 4, 18) - IST_OFFSET_MS], // W1 May 14-17 IST
+  [Date.UTC(2026, 4, 18) - IST_OFFSET_MS, Date.UTC(2026, 4, 25) - IST_OFFSET_MS], // W2 May 18-24 IST
+  [Date.UTC(2026, 4, 25) - IST_OFFSET_MS, Date.UTC(2026, 5, 1)  - IST_OFFSET_MS], // W3 May 25-31 IST
+  [Date.UTC(2026, 5, 1)  - IST_OFFSET_MS, Date.UTC(2026, 5, 8)  - IST_OFFSET_MS], // W4 Jun 1-7 IST
+  [Date.UTC(2026, 5, 8)  - IST_OFFSET_MS, Date.UTC(2026, 5, 15) - IST_OFFSET_MS], // W5 Jun 8-14 IST
+  [Date.UTC(2026, 5, 15) - IST_OFFSET_MS, Date.UTC(2026, 5, 22) - IST_OFFSET_MS], // W6 Jun 15-21 IST
+  [Date.UTC(2026, 5, 22) - IST_OFFSET_MS, Date.UTC(2026, 5, 29) - IST_OFFSET_MS], // W7 Jun 22-28 IST
+  [Date.UTC(2026, 5, 29) - IST_OFFSET_MS, Date.UTC(2026, 6, 6)  - IST_OFFSET_MS], // W8 Jun 29-Jul 5 IST
+  [Date.UTC(2026, 6, 6)  - IST_OFFSET_MS, Date.UTC(2026, 6, 10) - IST_OFFSET_MS], // W9 Jul 6-9 IST
 ];
 const TOTAL_WEEKS = WEEK_RANGES.length;
 
@@ -72,33 +76,36 @@ async function getSubmissions(formId) {
 }
 
 // Batch-fetch UTM properties from HubSpot contact records.
-// Used as fallback when pageUrl has no UTMs (e.g. email link redirect lost UTMs).
-// Returns { "vid": { source, medium, campaign } }.
+// Returns { "vid": { source, medium, campaign } } or { _error: msg } on failure.
 async function batchGetContactUtms(contactVids) {
   if (!contactVids.length) return {};
-  const utmMap = {};
-  for (let i = 0; i < contactVids.length; i += 100) {
-    const chunk = contactVids.slice(i, i + 100);
-    const data = await hs("/crm/v3/objects/contacts/batch/read", {
-      method: "POST",
-      body: JSON.stringify({
-        inputs: chunk.map((vid) => ({ id: String(vid) })),
-        properties: ["utm_source", "utm_medium", "utm_campaign"],
-      }),
-    });
-    for (const contact of data.results || []) {
-      const p = contact.properties || {};
-      const s = p.utm_source, m = p.utm_medium, c = p.utm_campaign;
-      if (s || m || c) {
-        utmMap[String(contact.id)] = {
-          source:   (s || "(none)").toLowerCase().trim(),
-          medium:   (m || "(none)").toLowerCase().trim(),
-          campaign: (c || "(none)").toLowerCase().trim(),
-        };
+  try {
+    const utmMap = {};
+    for (let i = 0; i < contactVids.length; i += 100) {
+      const chunk = contactVids.slice(i, i + 100);
+      const data = await hs("/crm/v3/objects/contacts/batch/read", {
+        method: "POST",
+        body: JSON.stringify({
+          inputs: chunk.map((vid) => ({ id: String(vid) })),
+          properties: ["utm_source", "utm_medium", "utm_campaign"],
+        }),
+      });
+      for (const contact of data.results || []) {
+        const p = contact.properties || {};
+        const s = p.utm_source, m = p.utm_medium, c = p.utm_campaign;
+        if (s || m || c) {
+          utmMap[String(contact.id)] = {
+            source:   (s || "(none)").toLowerCase().trim(),
+            medium:   (m || "(none)").toLowerCase().trim(),
+            campaign: (c || "(none)").toLowerCase().trim(),
+          };
+        }
       }
     }
+    return utmMap;
+  } catch (e) {
+    return { _error: e.message };
   }
-  return utmMap;
 }
 
 // ---- Email extraction -----------------------------------------------------
@@ -126,7 +133,6 @@ function parseUtms(pageUrl) {
   }
 }
 
-// Fallback: read UTMs from hidden form fields when pageUrl has none
 function parseUtmsFromValues(sub) {
   const get = (name) => (sub.values || []).find((v) => v.name === name)?.value || "";
   const source   = get("utm_source");
@@ -180,8 +186,8 @@ function weekIndex(tsMs) {
 
 function weekLabel(i) {
   const [start, endExcl] = WEEK_RANGES[i];
-  const startD = new Date(start);
-  const endD   = new Date(endExcl - DAY_MS);
+  const startD = new Date(start + IST_OFFSET_MS);
+  const endD   = new Date(endExcl - DAY_MS + IST_OFFSET_MS);
   const startStr = startD.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   const endStr   = startD.getUTCMonth() === endD.getUTCMonth()
     ? String(endD.getUTCDate())
@@ -198,7 +204,6 @@ export default async function handler(req, res) {
     const formId         = await getFormId();
     const rawSubmissions = await getSubmissions(formId);
 
-    // Tally excluded submissions before filtering
     let filteredEverstage  = 0;
     let filteredNoEmail    = 0;
     let filteredNoContact  = 0;
@@ -217,7 +222,6 @@ export default async function handler(req, res) {
       return true;
     });
 
-    // For submissions still unattributed after pageUrl+formValues, fetch UTMs from contact records
     const needsContactLookup = submissions
       .filter((sub) => {
         const utm = parseUtms(sub.pageUrl) || parseUtmsFromValues(sub);
@@ -226,36 +230,48 @@ export default async function handler(req, res) {
       .map((sub) => sub.contactVid);
     const contactUtmMap = await batchGetContactUtms(needsContactLookup);
 
-    // Week metadata
     const weeks = WEEK_RANGES.map((range, i) => ({
       label:    weekLabel(i),
-      startISO: new Date(range[0]).toISOString().slice(0, 10),
+      startISO: new Date(range[0] + IST_OFFSET_MS).toISOString().slice(0, 10),
       sessions: SESSIONS
         .filter((s) => { const sd = Date.parse(s.date); return sd >= range[0] && sd < range[1]; })
         .map((s) => s.id),
     }));
 
-    // Aggregate: channel -> count per week
     const counts      = {};
     const dailyCounts = {};
+    const debugUnattributed = [];
 
     for (const sub of submissions) {
-      const utm = parseUtms(sub.pageUrl)
-        || parseUtmsFromValues(sub)
-        || (sub.contactVid ? contactUtmMap[String(sub.contactVid)] : null);
-      const key = mapToChannel(utm);
-      const wi  = weekIndex(sub.submittedAt);
+      const urlUtm     = parseUtms(sub.pageUrl);
+      const valUtm     = parseUtmsFromValues(sub);
+      const rawContact = sub.contactVid ? contactUtmMap[String(sub.contactVid)] : null;
+      const contactUtm = (rawContact && !rawContact._error) ? rawContact : null;
+      const utm        = urlUtm || valUtm || contactUtm;
+      const key        = mapToChannel(utm);
+      const wi         = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
 
       const dateStr = new Date(sub.submittedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       dailyCounts[dateStr] = (dailyCounts[dateStr] || 0) + 1;
+
+      if (key === UNKNOWN) {
+        debugUnattributed.push({
+          submittedAt:  sub.submittedAt,
+          contactVid:   sub.contactVid || null,
+          pageUrl:      sub.pageUrl || null,
+          urlUtm,
+          valUtm,
+          contactUtm:   rawContact || null,
+          crmError:     contactUtmMap._error || null,
+        });
+      }
     }
 
-    // Per-week daily breakdown
     const weekDailyBreakdown = WEEK_RANGES.map(([start, endExcl]) => {
       const days = [];
       for (let d = start; d < endExcl; d += DAY_MS) {
-        const dateStr = new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        const dateStr = new Date(d + IST_OFFSET_MS).toISOString().slice(0, 10);
         const label   = new Date(d).toLocaleDateString("en-US", {
           weekday: "short", month: "short", day: "numeric", timeZone: "Asia/Kolkata",
         });
@@ -264,7 +280,6 @@ export default async function handler(req, res) {
       return days;
     });
 
-    // Sort channels by total desc, keep Direct/Unknown last
     const channels = Object.keys(counts).sort((a, b) => {
       if (a === UNKNOWN) return 1;
       if (b === UNKNOWN) return -1;
@@ -303,6 +318,7 @@ export default async function handler(req, res) {
         total:      filteredEverstage + filteredNoEmail + filteredNoContact,
         rawTotal:   rawSubmissions.length,
       },
+      debugUnattributed,
       weeks,
       channels,
       matrix,
