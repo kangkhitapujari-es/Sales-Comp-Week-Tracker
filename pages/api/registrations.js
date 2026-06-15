@@ -91,6 +91,20 @@ function parseUtms(pageUrl) {
   }
 }
 
+// Fallback: read UTMs from hidden form fields when pageUrl has none
+function parseUtmsFromValues(sub) {
+  const get = (name) => (sub.values || []).find((v) => v.name === name)?.value || "";
+  const source   = get("utm_source");
+  const medium   = get("utm_medium");
+  const campaign = get("utm_campaign");
+  if (!source && !medium && !campaign) return null;
+  return {
+    source:   (source   || "(none)").toLowerCase().trim(),
+    medium:   (medium   || "(none)").toLowerCase().trim(),
+    campaign: (campaign || "(none)").toLowerCase().trim(),
+  };
+}
+
 // ---- Channel mapping (priority order: most-specific first) ----------------
 function mapToChannel(utm) {
   if (!utm) return UNKNOWN;
@@ -182,7 +196,8 @@ export default async function handler(req, res) {
     const dailyCounts = {};
 
     for (const sub of submissions) {
-      const key = mapToChannel(parseUtms(sub.pageUrl));
+      const utm = parseUtms(sub.pageUrl) || parseUtmsFromValues(sub);
+      const key = mapToChannel(utm);
       const wi  = weekIndex(sub.submittedAt);
       (counts[key] ||= new Array(TOTAL_WEEKS).fill(0))[wi] += 1;
 
