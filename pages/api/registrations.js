@@ -157,7 +157,7 @@ function mapToChannel(utm) {
   if (c === "csm" && m === "1-1" && s === "invites")          return "CSM Invites";
   if ((c === "kangkhita" || c === "jyothsna") && m === "1-1-reachouts" && s === "linkedin") return "LinkedIn 1-1 Invites";
 
-  if (/^\w+-(abm|intent)-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
+  if (/^\w+-(abm|intent)(-\d+)?$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
 
   if (/^(kelly|mike|siva|jose)-post-\d+$/.test(c)    && (m === "linkedin" || m === "executive-linkedin") && s === "organic-social") return "Executive LinkedIn Organic";
   if (/^(matt|matthew|dillon)-post-\d+$/.test(c)     && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 1 Speakers LinkedIn Organic";
