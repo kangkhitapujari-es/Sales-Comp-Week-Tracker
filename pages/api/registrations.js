@@ -165,10 +165,10 @@ function mapToChannel(utm) {
 
   if (/^\w+-(abm|intent)(-\d+)?$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
 
-  if (/^(kelly|mike|siva|jose)-post-\d+$/.test(c)      && (m === "linkedin" || m === "executive-linkedin") && s === "organic-social") return "Executive LinkedIn Organic";
-  if (/^(matt|matthew|dillon)-post-\d+$/.test(c)       && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 1 Speakers LinkedIn Organic";
-  if (/^(trenli|juan)(-post-\d+)?$/.test(c)            && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 2 Speakers LinkedIn Organic";
-  if (/^(nate|nathan|john)-post-\d+$/.test(c)          && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 3 Speakers LinkedIn Organic";
+  if (/^(kelly|mike|siva|jose)(-post-\d+)?$/.test(c)    && (m === "linkedin" || m === "executive-linkedin") && s === "organic-social") return "Executive LinkedIn Organic";
+  if (/^(matt|matthew|dillon)(-post-\d+)?$/.test(c)     && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 1 Speakers LinkedIn Organic";
+  if (/^(trenli|juan)(-post-\d+)?$/.test(c)             && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 2 Speakers LinkedIn Organic";
+  if (/^(nate|nathan|john)(-post-\d+)?$/.test(c)        && (m === "linkedin" || m === "speaker-linkedin")   && s === "organic-social") return "Session 3 Speakers LinkedIn Organic";
   if (/^post[\s-]?\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "Everstage Organic Social";
   if (/^\w+-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
 
