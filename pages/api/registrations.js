@@ -173,7 +173,7 @@ function mapToChannel(utm) {
   if (/^\w+-\d+$/.test(c) && m === "linkedin" && s === "organic-social") return "BDR Organic LinkedIn";
 
   if (m === "paid" && s === "linkedin") return "LinkedIn Ads";
-  if (m === "mailchimp" && s === "email") return "Mailchimp Email Blasts";
+  if (m === "mailchimp") return "Mailchimp Email Blasts";
   if (c === "email-blast" && m === "community" && s === "roco") return "ROCO Promotions";
   if (m === "slack" && s === "uncappd") return "Uncappd Slack Posts";
   if (m === "email" && s === "hs_email" && c.includes("uncappd")) return "Uncappd Newsletter";
