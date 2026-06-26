@@ -98,7 +98,10 @@ export default function Home() {
               <Stat label="Total Registrants"   value={data.total}          accent={C.accent} />
               <Stat label="This Week"           value={data.thisWeek}       accent={C.accent} />
               <Stat label="Active Channels"     value={data.activeChannels} accent={C.accent} />
-              <Stat label="Days to Session 1"   value={data.daysToS1}       accent={C.accent} />
+              {data.sessions.slice(1).map((s, i) => {
+                const d = Math.max(0, Math.ceil((Date.parse(s.date) - Date.now()) / 86400000));
+                return <Stat key={s.id} label={"Days to Session " + (i + 2)} value={d} accent={C.accent} />;
+              })}
             </div>
 
             {/* Filtered submissions callout */}
