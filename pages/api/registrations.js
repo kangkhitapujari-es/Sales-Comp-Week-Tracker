@@ -176,7 +176,8 @@ function mapToChannel(utm) {
   if (m === "mailchimp") return "Mailchimp Email Blasts";
   if (c === "email-blast" && m === "community" && s === "roco") return "ROCO Promotions";
   if (m === "slack" && s === "uncappd") return "Uncappd Slack Posts";
-  if (m === "email" && s === "hs_email" && c.includes("uncappd")) return "Uncappd Newsletter";
+  if (m === "email" && s === "hs_email" && c.includes("uncappd"))       return "Uncappd Newsletter";
+  if (m === "email" && s === "hs_email" && c === "customer-comms")      return "Customer Newsletter";
   if (m === "email" && s === "hs_email") return "Marketing Nurture Newsletter";
   if (c === "pop-up" && m === "notification" && s === "homepage") return "Homepage Hello Bar";
 
