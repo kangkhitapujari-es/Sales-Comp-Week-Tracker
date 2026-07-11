@@ -176,8 +176,8 @@ function mapToChannel(utm) {
   if (m === "mailchimp") return "Mailchimp Email Blasts";
   if (c === "email-blast" && m === "community" && s === "roco") return "ROCO Promotions";
   if (m === "slack" && s === "uncappd") return "Uncappd Slack Posts";
-  if (m === "email" && s === "hs_email" && c.includes("uncappd"))       return "Uncappd Newsletter";
-  if (m === "email" && s === "hs_email" && c === "customer-comms")      return "Customer Newsletter";
+  if (m === "email" && s === "hs_email" && c.includes("uncappd"))  return "Uncappd Newsletter";
+  if (m === "email" && s === "hs_email" && c === "customer-comms") return "Customer Newsletter";
   if (m === "email" && s === "hs_email") return "Marketing Nurture Newsletter";
   if (c === "pop-up" && m === "notification" && s === "homepage") return "Homepage Hello Bar";
 
@@ -212,21 +212,26 @@ export default async function handler(req, res) {
     const formId         = await getFormId();
     const rawSubmissions = await getSubmissions(formId);
 
+    // Step 1: apply exclusion filters
     let filteredEverstage  = 0;
     let filteredNoEmail    = 0;
     let filteredNoContact  = 0;
-    for (const sub of rawSubmissions) {
+    const afterExclusion = rawSubmissions.filter((sub) => {
       const email = getEmail(sub);
-      if (!email) filteredNoEmail++;
-      else if (email.endsWith("@everstage.com")) filteredEverstage++;
-      else if ("contactVid" in sub && !sub.contactVid) filteredNoContact++;
-    }
+      if (!email)                                        { filteredNoEmail++;    return false; }
+      if (email.endsWith("@everstage.com"))              { filteredEverstage++;  return false; }
+      if ("contactVid" in sub && !sub.contactVid)        { filteredNoContact++;  return false; }
+      return true;
+    });
 
-    const submissions = rawSubmissions.filter((sub) => {
+    // Step 2: deduplicate by email — keep earliest submission per address
+    afterExclusion.sort((a, b) => a.submittedAt - b.submittedAt);
+    const emailSeen = new Set();
+    let filteredDuplicates = 0;
+    const submissions = afterExclusion.filter((sub) => {
       const email = getEmail(sub);
-      if (!email) return false;
-      if (email.endsWith("@everstage.com")) return false;
-      if ("contactVid" in sub && !sub.contactVid) return false;
+      if (emailSeen.has(email)) { filteredDuplicates++; return false; }
+      emailSeen.add(email);
       return true;
     });
 
@@ -320,11 +325,12 @@ export default async function handler(req, res) {
       activeChannels,
       daysToS1,
       filteredStats: {
-        everstage:  filteredEverstage,
-        noEmail:    filteredNoEmail,
-        noContact:  filteredNoContact,
-        total:      filteredEverstage + filteredNoEmail + filteredNoContact,
-        rawTotal:   rawSubmissions.length,
+        everstage:   filteredEverstage,
+        noEmail:     filteredNoEmail,
+        noContact:   filteredNoContact,
+        duplicates:  filteredDuplicates,
+        total:       filteredEverstage + filteredNoEmail + filteredNoContact + filteredDuplicates,
+        rawTotal:    rawSubmissions.length,
       },
       debugUnattributed,
       weeks,
